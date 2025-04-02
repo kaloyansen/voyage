@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo error: run this script with root privileges, try:
+    echo sudo $0
+    exit 1
+fi
+
+REAL=`realpath $0`
+POINT=`dirname $REAL`
+INSTALL=/usr
+BINARY=/bin/voyage
+
+echo ln -s $POINT/$BINARY $INSTALL/$BINARY
+ln -s $POINT/$BINARY $INSTALL/$BINARY

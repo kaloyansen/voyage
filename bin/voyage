@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+#
+# code: kaloyansen@gmail.com
+# purpose: activate/create python virual environment and run the application
+# usage: this_script [python options]
+
+REAL=`realpath $0`
+OU=`dirname $REAL`
+ENROOT=$OU/..
+ACTIVATE=$ENROOT/venv/bin/activate
+if [ -f $ACTIVATE ]; then
+
+    source $ACTIVATE
+else
+
+    python3 -m venv $ENROOT/venv
+    source $ACTIVATE
+    pip install --upgrade pip
+    pip install -r $ENROOT/requirements.txt
+fi
+$ENROOT/src/voyage.py $@
+deactivate
