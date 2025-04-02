@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
+import argparse
 import os
 from mido import Message, MidiFile
 import fluidsynth
 import subprocess
 from pydub import AudioSegment
-import argparse
+from pedalboard import Reverb
+import numpy as np
 
 
-def modify_midi_instrument(midi_in, midi_out, program_number = 0):
+def modify_midi(midi_in: str, program_number = 0) -> str:
     """Change the instrument (program number) in a MIDI file."""
     mid = MidiFile(midi_in)
     for track in mid.tracks:
@@ -24,25 +26,46 @@ def modify_midi_instrument(midi_in, midi_out, program_number = 0):
                     # insert a program change before the first note
                     track.insert(i, Message('program_change', program=program_number, channel=msg.channel, time=0))
 
+    midi_out = f"{midi_in}.aux"
     mid.save(midi_out)
-
-def midi_to_mp3(midi_file, soundfont, mp3_file, title = "unknown", artist = "unknown", genre = "unknown"):
-    """Convert MIDI to MP3 using FluidSynth and add metadata."""
-    wav_file = "temp.wav"
-    subprocess.run(["fluidsynth", "-ni", soundfont, midi_file, "-F", wav_file, "-r", "44100"], check = True)
-    audio = AudioSegment.from_wav(wav_file)
-    audio.export(mp3_file, format = "mp3", tags = {"title": title, "artist": artist, "genre": genre})
-    subprocess.run(["rm", wav_file])
+    return midi_out
 
 
-def increase_volume(input_mp3, output_mp3, db_increase = 5):
+def synthesis(midi_file: str, soundfont: str) -> AudioSegment:
+    """ syntesize audio with midi input using system fluidsynt """
+    wave = '/tmp/temp.wav'
+    subprocess.run(["fluidsynth", "-ni", soundfont, midi_file, "-F", wave, "-r", "44100"], check = True)
+    return AudioSegment.from_wav(wave)
 
-    audio = AudioSegment.from_file(input_mp3, format = "mp3")
-    louder_audio = audio + db_increase
-    louder_audio.export(output_mp3, format = "mp3")
+    
+def process_audio(audio: AudioSegment, volume: int) -> AudioSegment:
+    """ process audio """
+    return apply_reverb(audio) + volume
+    #audio_with_reverb = apply_reverb(audio)
+    #return audio_with_reverb + volume
 
 
-def get_instrument(synth, font, bank, program):
+def export_mp3(audio: AudioSegment, mp3_file: str, title = "unknown", artist = "unknown", genre = 42):
+    """ export mp3 audio file """
+    audio.export(mp3_file, format = "mp3", tags = {"title": title, "artist": artist}) #, "genre": genre})
+
+
+def apply_reverb(audio: AudioSegment) -> AudioSegment:
+    """Apply high-quality reverb using pedalboard (with proper float conversion)."""
+    # Convert pydub AudioSegment to numpy array in float32 format
+    samples = np.array(audio.get_array_of_samples(), dtype = np.float32)
+    # Normalize to [-1.0, 1.0] range (required by pedalboard)
+    if audio.sample_width == 2: samples /= 32768.0 # 16-bit audio
+    elif audio.sample_width == 3: samples /= 8388608.0 # 24-bit audio (rare)
+    sr = audio.frame_rate    
+    # Apply reverb
+    processed_samples = Reverb(room_size = 0.75, damping = 0.5, wet_level = 0.3).process(samples, sr)
+    # Convert back to 16-bit integers for pydub
+    processed_samples = (processed_samples * 32768.0).astype(np.int16)
+    return AudioSegment(processed_samples.tobytes(), frame_rate = sr, sample_width = 2, channels = audio.channels)
+
+
+def get_instrument(synth: fluidsynth.Synth, font: str, bank: int, program: int) -> str:
 
     synth.program_select(0, font, bank, program)
     instrument = synth.channel_info(0)[3]
@@ -75,8 +98,8 @@ def main():
     default_inst = 4
     default_volume = 16
     parser = argparse.ArgumentParser(description = "a command-line utility to convert midi to mp3 written in python")
-    parser.add_argument('-m', '--midi',   type = str, default = default_midi,   help = f"midi input file (default is {default_midi}.mp3)")
-    parser.add_argument('-o', '--output',   type = str, default = 0,   help = f"output mp3 file name (default is {default_midi})")
+    parser.add_argument('-m', '--midi',       type = str, default = default_midi,   help = f"midi input file (default is {default_midi}.mp3)")
+    parser.add_argument('-o', '--output',     type = str, default = 0,              help = f"output mp3 file name (default is {default_midi})")
     parser.add_argument('-f', '--font',       type = str, default = default_font,   help = f"sound font pathname (default is {default_font})")
     parser.add_argument('-i', '--instrument', type = int, default = default_inst,   help = f"midi program number (default is {default_inst})")
     parser.add_argument('-v', '--volume',     type = int, default = default_volume, help = f"mp3 volume (default is {default_volume})")
@@ -100,24 +123,18 @@ def main():
 
         jack = os.path.splitext(args.midi)
         title = jack[0]
-        mitle = f"{args.midi}.mp3"
-        if args.output: mitle = args.output
+        mp3 = f"{args.midi}.mp3"
+        if args.output: mp3 = args.output
 
-        midi_aux = f"{args.midi}.aux"
-        mp3_out = f"{mitle}"
-        mp3_aux = f"{mitle}.aux"
+        midi_aux = modify_midi(args.midi, args.instrument)
+        au = synthesis(midi_aux, args.font)
+        pau = process_audio(au, args.volume)
+        export_mp3(pau, mp3, title  = title, artist = 'Kaloyan Krastev', genre = 420)
+        subprocess.run(["rm", midi_aux])
 
-        modify_midi_instrument(args.midi, midi_aux, args.instrument)
-        midi_to_mp3(midi_aux,
-                    args.font,
-                    mp3_aux,
-                    title  = title,
-                    artist = 'Kaloyan Krastev',
-                    genre = 'medievale')
-        increase_volume(mp3_aux, mp3_out, args.volume)
         instrument = get_instrument(fs, sfid, 0, args.instrument)
         print("= " * 33)
-        print(f"synthesized {mp3_out} from {args.midi} with {args.instrument} {instrument}")
+        print(f"synthesized {mp3} from {args.midi} with {args.instrument} {instrument}")
 
 
 if __name__ == "__main__":
