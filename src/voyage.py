@@ -75,7 +75,8 @@ def main():
     default_inst = 4
     default_volume = 10
     parser = argparse.ArgumentParser(description = "a command-line utility to convert midi to mp3 written in python")
-    parser.add_argument('-m', '--midi',   type = str, default = default_midi,   help = f"midi input file (default is {default_midi})")
+    parser.add_argument('-m', '--midi',   type = str, default = default_midi,   help = f"midi input file (default is {default_midi}.mp3)")
+    parser.add_argument('-o', '--output',   type = str, default = 0,   help = f"output mp3 file name (default is {default_midi})")
     parser.add_argument('-f', '--font',       type = str, default = default_font,   help = f"sound font pathname (default is {default_font})")
     parser.add_argument('-i', '--instrument', type = int, default = default_inst,   help = f"midi program number (default is {default_inst})")
     parser.add_argument('-v', '--volume',     type = int, default = default_volume, help = f"mp3 volume (default is {default_volume})")
@@ -99,10 +100,12 @@ def main():
 
         jack = os.path.splitext(args.midi)
         title = jack[0]
+        mitle = f"{args.midi}.mp3"
+        if args.output: mitle = args.output
 
-        midi_aux = f"{title}.mid.aux"
-        mp3_out = f"{title}.mp3"
-        mp3_aux = f"{title}.mp3.aux"
+        midi_aux = f"{args.midi}.aux"
+        mp3_out = f"{mitle}"
+        mp3_aux = f"{mitle}.aux"
 
         modify_midi_instrument(args.midi, midi_aux, args.instrument)
         midi_to_mp3(midi_aux,
