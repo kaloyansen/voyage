@@ -73,7 +73,7 @@ def main():
         return
     default_midi = 'last.mid'
     default_inst = 4
-    default_volume = 10
+    default_volume = 16
     parser = argparse.ArgumentParser(description = "a command-line utility to convert midi to mp3 written in python")
     parser.add_argument('-m', '--midi',   type = str, default = default_midi,   help = f"midi input file (default is {default_midi}.mp3)")
     parser.add_argument('-o', '--output',   type = str, default = 0,   help = f"output mp3 file name (default is {default_midi})")
