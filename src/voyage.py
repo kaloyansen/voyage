@@ -38,11 +38,10 @@ def synthesis(midi_file: str, soundfont: str) -> AudioSegment:
     return AudioSegment.from_wav(wave)
 
     
-def process_audio(audio: AudioSegment, volume: int) -> AudioSegment:
+def process_audio(audio: AudioSegment, volume: int, reverb: bool) -> AudioSegment:
     """ process audio """
-    return apply_reverb(audio) + volume
-    #audio_with_reverb = apply_reverb(audio)
-    #return audio_with_reverb + volume
+    if reverb: return apply_reverb(audio) + volume
+    return audio + volume
 
 
 def export_mp3(audio: AudioSegment, mp3_file: str, title = "unknown", artist = "unknown", genre = 42):
@@ -51,17 +50,13 @@ def export_mp3(audio: AudioSegment, mp3_file: str, title = "unknown", artist = "
 
 
 def apply_reverb(audio: AudioSegment) -> AudioSegment:
-    """Apply high-quality reverb using pedalboard (with proper float conversion)."""
-    # Convert pydub AudioSegment to numpy array in float32 format
+    """ high-quality reverb with pedalboard """
     samples = np.array(audio.get_array_of_samples(), dtype = np.float32)
-    # Normalize to [-1.0, 1.0] range (required by pedalboard)
     if audio.sample_width == 2: samples /= 32768.0 # 16-bit audio
     elif audio.sample_width == 3: samples /= 8388608.0 # 24-bit audio (rare)
     sr = audio.frame_rate    
-    # Apply reverb
     processed_samples = Reverb(room_size = 0.75, damping = 0.5, wet_level = 0.3).process(samples, sr)
-    # Convert back to 16-bit integers for pydub
-    processed_samples = (processed_samples * 32768.0).astype(np.int16)
+    processed_samples = (processed_samples * 32768.0).astype(np.int16) # back to 16-bit
     return AudioSegment(processed_samples.tobytes(), frame_rate = sr, sample_width = 2, channels = audio.channels)
 
 
@@ -103,6 +98,7 @@ def main():
     parser.add_argument('-f', '--font',       type = str, default = default_font,   help = f"sound font pathname (default is {default_font})")
     parser.add_argument('-i', '--instrument', type = int, default = default_inst,   help = f"midi program number (default is {default_inst})")
     parser.add_argument('-v', '--volume',     type = int, default = default_volume, help = f"mp3 volume (default is {default_volume})")
+    parser.add_argument('-r', '--reverb',                  action = "store_true",   help = "apply reverb")
     parser.add_argument('-p', '--programs',                action = "store_true",   help = "list midi programs")
     args = parser.parse_args()
 
@@ -128,7 +124,7 @@ def main():
 
         midi_aux = modify_midi(args.midi, args.instrument)
         au = synthesis(midi_aux, args.font)
-        pau = process_audio(au, args.volume)
+        pau = process_audio(au, args.volume, args.reverb)
         export_mp3(pau, mp3, title  = title, artist = 'Kaloyan Krastev', genre = 420)
         subprocess.run(["rm", midi_aux])
 
